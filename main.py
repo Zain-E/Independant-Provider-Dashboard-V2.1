@@ -16,122 +16,44 @@ from datetime import date
 
 #========================================== LOADING THE DATA ===========================================================
 
-#load data
-df1 = pd.read_csv(r'Raw_Data_Final.csv', encoding='ISO-8859-1', low_memory=False)
-#print(df1)
+df = pd.read_csv(r'ActualsPlanTidy_Data.csv', encoding='ISO-8859-1', low_memory=False)
+df['Activity Count'].fillna(0, inplace=True)
+print(df.shape)
+df = df[(df['POD'] !='DNA/Cancellation (Theatres Only)') & (df['POD'] !='Number of 1/2 Day Lists (Theatres Only)') & (df['POD'] !='Chemotherapy')]
+print(df.shape)
 
 #Load Location data
 location_df = pd.read_csv(r'Location_data.csv', encoding='ISO-8859-1', low_memory=False)
-#print(location_df)
 
-#Map
-df_map_original = pd.read_csv(r'ISP_Data_Plan.csv', encoding='ISO-8859-1', low_memory=False)
-
-#Join dataframes
-df = pd.merge(df1,location_df,on='Provider', how='left')
-
-#replace blanks with 0
-#df['Activity Count'] = df['Activity Count'].replace(np.nan, '', regex=True)
-df['Activity Count'].fillna(0, inplace=True)
-
-#Create short hand descriptions for the Graphs
-short_hand_dic = {'Parkside (Aspen Healthcare)' : 'Parkside',
-                    'Shirley Oaks (BMI Healthcare)' : 'S.Oaks',
-                    'Ashtead (Ramsay Health UK)' : 'Ashtead',
-                    'The New Victoria Hospital (The New Victoria Hospital Limited)' : 'N.Vic',
-                    "St Anthony's (Spire Healthcare)" : 'St.Ant',
-                    'Cavell (BMI Healthcare)' : 'Cavell',
-                    'Kings Oak (BMI Healthcare)' : 'K.Oak',
-                    'Highgate Private (Aspen Healthcare)' : 'Highgate',
-                    'Schoen Clinic London (Schoen Clinic UK)' : 'Schoen',
-                    'The Wellington Hospital (HCA UK)' : 'Welling',
-                    'The Princess Grace (HCA UK)' : 'P.Grace',
-                    'The Harley Street Clinic (HCA UK)' : 'Harley.St',
-                    'The London Clinic (The London Clinic)' : 'London.C',
-                    'Hendon (BMI Healthcare)' : 'Hendon',
-                    'Holly House (Holly House)' : 'Holly.H',
-                    'London East (Spire Healthcare)' : 'L.East',
-                    'London Independent (BMI Healthcare)' : 'L.indep',
-                    'Weymouth Street Hospital (Phoenix Hospital Group)' : 'Weymouth',
-                    'North East London Teatment Centre (Care UK Clinical Services Limited)' : 'N.E.L',
-                    'Spire Hartswood' : 'Spire.Har',
-                    'The Portland (HCA UK)' : 'Portland',
-                    'West Valley (Ramsay Health UK)' : 'W.Valley',
-                    'Fortius Clinic (Fortius Clinic)' : 'Fortius',
-                    'Chelsfield (BMI Healthcare)' : 'Chelsf',
-                    'Blackheath (BMI Healthcare)' : 'BlackH',
-                    'London Bridge (HCA UK)' : 'L.Bridge',
-                    'Harley Street on 15 (HCA UK)' : 'H.on15',
-                    'Bishopswood (BMI Healthcare)' : 'Bishops.W',
-                    'Bupa Cromwell Hospital (Bupa Group)' : 'B.Crom',
-                    'Hospital of St John & St Elizabeth (Hospital of St John & St Elizabeth)' : 'St.John',
-                    "KING EDWARD VII'S HOSPITAL SISTER AGNES (KING EDWARD VII'S HOSPITAL SISTER AGNES HQ)" : 'KEV',
-                    'The Lister (HCA UK)' : 'Lister',
-                    'Clementine Churchill (BMI Healthcare)' : 'Clem.Church',
-                    'HCA Chiswick' : 'Chiswick',
-                    'Sloane (BMI Healthcare)' : 'Sloane'}
-
-#Add these short hand names as df columns
-df['Provider_short'] = df['Provider'].map(short_hand_dic)
+#Join Lat and Lon onto the original df
+df = pd.merge(df,location_df,on='Independent Provider', how='left')
 print(df.shape)
+print(df)
 
-#Remove the PODs that are not the 4 main PODs
-df = df[(df['POD'] !='DNA/Cancellation (Theatres Only)') & (df['POD'] !='Number of 1/2 Day Lists (Theatres Only)')]
-print(df.shape)
+#Convert Lat and Long to str for grouping
+df['Lat'] = df['Lat'].astype(str)
+df['Long'] = df['Long'].astype(str)
 
-#Create a df of unique dates for the Range Slider
-df_slider = df['Week Commencing Date'].unique()
-# df_slider= pd.DataFrame(df_slider)
-# df_slider.rename(columns={0: "Date"}, inplace=True)
-#df_slider = pd.to_datetime(df_slider)
-#df_slider.sort_values('Date', ascending=True)
-#print(df_slider)
 
-#Tweak the above df to give the dates an index that can be referenced using the slider!
-weekindex = {int(i): str(df_slider[i]) for i in range(len(df_slider))} #would usually need LEN - 1 to account for index 0
-df_weekindex = pd.DataFrame.from_dict(weekindex, orient='index', columns=['Date'])
-#print(df_weekindex)
-
-#We now need to unstack the data to create 3 fact columns, actuals, plan and capacity
-#Needs to be done for the diagnostics separately as it needs to be grouped differently
-#First by creating 3 separate datasets after grouping (slightly)
-df_grouped = df.groupby(['Inner or Outer','Plan or Actuals','Activity Type', 'Provider','STP','POD','Week Commencing Date','Lat','Long'], as_index=False)['Activity Count'].sum()
+df_grouped = df.groupby(['Inner or Outer','Plan or Actuals','Activity Type', 'Independent Provider','STP','POD','Week Commencing Date','Lat','Long'], as_index=False)['Activity Count'].sum()
 df_actuals = df_grouped[(df_grouped['Plan or Actuals'] =='Actuals')]
 df_actuals.rename(columns={"Activity Count": "Actual Activity"}, inplace=True)
 df_plan = df_grouped[(df_grouped['Plan or Actuals'] =='Plan')]
 df_plan.rename(columns={"Activity Count": "Plan Activity"}, inplace=True)
-df_grouped_capacity = df.groupby(['Inner or Outer','Plan or Actuals','Activity Type', 'Provider','STP','POD','Week Commencing Date','Lat','Long'], as_index=False)['Activity Count'].mean()
-df_capacity = df_grouped_capacity[(df_grouped_capacity['Plan or Actuals'] =='Capacity')]
-df_capacity.rename(columns={"Activity Count": "Capacity"}, inplace=True)
 
+print(df_actuals.shape)
+print(df_plan.shape)
 
-print(f'df actuals = {df_actuals.shape}')
-print(f'df capacity = {df_capacity.shape}')
-print(f'df plan = {df_plan.shape}')
 
 #Now we need to merge the datasets so we have 2 extra fact columns - plan and capacity values, this will be much easier to plot on tables/graphs
-df_merged = df_actuals.merge(df_plan, on=['Activity Type','Provider','STP','POD','Week Commencing Date'], how='left')
-df_merged = df_merged.drop(['Inner or Outer_y','Plan or Actuals_y','Lat_y','Long_y'], axis=1)
-df_merged = df_merged.merge(df_capacity, on=['Activity Type','Provider','STP','POD','Week Commencing Date'], how='left')
-df_merged = df_merged.drop(['Inner or Outer','Plan or Actuals','Lat','Long'], axis=1)
-df_merged.rename(columns={"Plan or Actuals_x": "Plan or Actuals",'Inner or Outer_x':'Inner or Outer','Lat_x':'Lat','Long_x':'Long'}, inplace=True)
-
-#Fill blanks for new columns
-df_merged['Capacity'].fillna(0, inplace=True)
-df_merged['Plan Activity'].fillna(0, inplace=True)
+df_merged = df_actuals.merge(df_plan, on=['Activity Type','Independent Provider','STP','POD','Week Commencing Date'], how='left')
+df_merged = df_merged.drop(['Inner or Outer_y','Plan or Actuals_y','Lat_y','Long_y','Plan or Actuals_x'], axis=1)
+df_merged.rename(columns={'Inner or Outer_x':'Inner or Outer','Lat_x':'Lat','Long_x':'Long'}, inplace=True)
 
 #Find the most recent date
 df_merged['Week Commencing Date'] = pd.to_datetime(df_merged['Week Commencing Date'])
 most_recent_date = df_merged['Week Commencing Date'].max()
 oldest_date = df_merged['Week Commencing Date'].min()
-
-print(most_recent_date)
-
-
-#Will save the DFs for checking and analysis
-#df_actuals.to_csv(r'D:\My Key Documents\365 Data Science Videos\Zains Python Code + Projects\Python Project 2 - Data Dashboard of Independant Providers (NHS)/check.csv', index=True, header=True)
-#df_plan.to_csv(r'D:\My Key Documents\365 Data Science Videos\Zains Python Code + Projects\Python Project 2 - Data Dashboard of Independant Providers (NHS)/check2.csv', index=True, header=True)
-#df_merged.to_csv(r'C:\Users\Zain\PycharmProjects\IndependantProviderDashboardV2\merged.csv', index=True, header=True)
 
 #========================================= DASH LAYOUT =================================================================
 
@@ -177,16 +99,6 @@ app.layout = html.Div([
                                                                                     placeholder='Please select your STP(s)'
                                                                                  ),width={'size':5, 'offset':-1})]),
 
-                        # html.Br(),
-                        #
-                        # dbc.Col(dcc.RangeSlider(id='Date_Slider',
-                        #                         min=0,
-                        #                         max=len(df_slider),
-                        #                         # subtract 5 instead of 1 due to invalid dates that do not need to be on the slider in the last 3 positions
-                        #                         step=None,
-                        #                         marks={int(i+2): str(df_slider[i+2]) for i in range(len(df_slider)-2)},
-                        #                         value=[],
-                        #                         ), width=12),
 
                         html.Br(),
 
@@ -215,8 +127,8 @@ app.layout = html.Div([
                                         min_date_allowed=date(1995, 8, 5),
                                         max_date_allowed=date(2023, 9, 1),
                                         initial_visible_month=date(2020, 1, 1),
-                                        start_date=date(2020,3,1),
-                                        end_date=date(2020,11,1),
+                                        start_date=date(2021,1,1),
+                                        end_date=date(2021,3,30),
                                         style={'position':'relative', 'zIndex':'999'}
                                     ), width={'offset': 1})),
 
@@ -286,19 +198,16 @@ def render_content(POD,STP,Checklist,start_date,end_date):
     df_dash = df_dash[df_dash['STP'].isin(STP)]
     df_dash = df_dash[df_dash['Inner or Outer'].isin(Checklist)]
     df_dash = df_dash[(df_dash['Week Commencing Date'] >= start_date) & (df_dash['Week Commencing Date'] <= end_date)]
-    df_dash_group = df_dash.groupby(['STP', 'Provider'], as_index=False)[
-        'Actual Activity', 'Plan Activity', 'Capacity'].sum()
+    df_dash_group = df_dash.groupby(['STP', 'Independent Provider'], as_index=False)[
+        'Actual Activity', 'Plan Activity'].sum()
     df_dash_group['Plan Utilisation (%)'] = (df_dash_group['Actual Activity']/df_dash_group['Plan Activity'])*100
     df_dash_group['Plan Utilisation (%)'] = df_dash_group['Plan Utilisation (%)'].replace([np.inf, -np.inf], np.nan)
-    df_dash_group['Capacity Utilisation (%)'] = (df_dash_group['Actual Activity'] / df_dash_group['Capacity']) * 100
-    df_dash_group['Capacity Utilisation (%)'] = df_dash_group['Capacity Utilisation (%)'].replace([np.inf, -np.inf], np.nan)
+
 
     #Formatting
     df_dash_group['Actual Activity'] = df_dash_group['Actual Activity'].map('{:,.0f}'.format)#to get numbers in format correctly
     df_dash_group['Plan Activity'] = df_dash_group['Plan Activity'].map('{:,.0f}'.format)  # to get numbers in format correctly
-    df_dash_group['Capacity'] = df_dash_group['Capacity'].map('{:,.0f}'.format)  # to get numbers in format correctly
     df_dash_group['Plan Utilisation (%)'] = df_dash_group['Plan Utilisation (%)'].map('{:.0f}'.format)  # to get numbers in format correctly
-    df_dash_group['Capacity Utilisation (%)'] = df_dash_group['Capacity Utilisation (%)'].map('{:.0f}'.format)
 
     return html.Div([
 
@@ -313,24 +222,16 @@ def render_content(POD,STP,Checklist,start_date,end_date):
                          style_cell_conditional=[
                                              {'if': {'column_id': 'STP'},
                                               'width': '14%'},  # 40
-                                             {'if': {'column_id': 'Provider'},
-                                              'width': '40%'},  # 300
+                                             {'if': {'column_id': 'Independent Provider'},
+                                              'width': '35%'},  # 300
                                              {'if': {'column_id': 'Actual Activity'},
-                                              'width': '6%',
+                                              'width': '12%',
                                               'textAlign': 'center'},
                                              {'if': {'column_id': 'Plan Activity'},
-                                              'width': '6%',
+                                              'width': '12%',
                                               'textAlign': 'center',
                                               },# 5
-                                             {'if': {'column_id': 'Capacity'},
-                                              'width': '6%',
-                                              'textAlign': 'center',
-                                              },
                                              {'if': {'column_id': 'Plan Utilisation (%)'},
-                                              'width': '9%',
-                                              'textAlign': 'center',
-                                              },
-                                             {'if': {'column_id': 'Capacity Utilisation (%)'},
                                               'width': '9%',
                                               'textAlign': 'center',
                                               },
@@ -347,7 +248,7 @@ def render_content(POD,STP,Checklist,start_date,end_date):
                                              },
                                              {
                                                  'if': {
-                                                     'filter_query': '{Plan Utilisation (%)} > 80',
+                                                     'filter_query': '{Plan Utilisation (%)} >= 80',
                                                      'column_id': 'Plan Utilisation (%)'
                                                  },
                                                  'backgroundColor': 'green',
@@ -355,7 +256,7 @@ def render_content(POD,STP,Checklist,start_date,end_date):
                                              },
                                              {
                                                  'if': {
-                                                     'filter_query': '{Plan Utilisation (%)} > 60 && {Plan Utilisation (%)} < 80',
+                                                     'filter_query': '{Plan Utilisation (%)} >= 60 && {Plan Utilisation (%)} < 80',
                                                      'column_id': 'Plan Utilisation (%)'
                                                  },
                                                  'backgroundColor': 'orange',
@@ -369,40 +270,7 @@ def render_content(POD,STP,Checklist,start_date,end_date):
                                                  'backgroundColor': 'rgb(204,204,204)',
                                                  'color': 'grey',
                                                  'fontWeight':'bold'
-                                             },
-                             {
-                                 'if': {
-                                     'filter_query': '{Capacity Utilisation (%)} >= 0 && {Capacity Utilisation (%)} < 60',
-                                     'column_id': 'Capacity Utilisation (%)'
-                                 },
-                                 'backgroundColor': 'tomato',
-                                 'color': 'white'
-                             },
-                             {
-                                 'if': {
-                                     'filter_query': '{Capacity Utilisation (%)} > 80',
-                                     'column_id': 'Capacity Utilisation (%)'
-                                 },
-                                 'backgroundColor': 'green',
-                                 'color': 'white'
-                             },
-                             {
-                                 'if': {
-                                     'filter_query': '{Capacity Utilisation (%)} > 60 && {Capacity Utilisation (%)} < 80',
-                                     'column_id': 'Capacity Utilisation (%)'
-                                 },
-                                 'backgroundColor': 'orange',
-                                 'color': 'white'
-                             },
-                             {
-                                 'if': {
-                                     'filter_query': '{Capacity Utilisation (%)} contains "nan"',
-                                     'column_id': 'Capacity Utilisation (%)'
-                                 },
-                                 'backgroundColor': 'rgb(204,204,204)',
-                                 'color': 'grey',
-                                 'fontWeight': 'bold'
-                             }
+                                             }
                          ],
                          style_header={
                                              'backgroundColor': 'rgb(188, 219, 245)',
@@ -436,12 +304,10 @@ def render_content(POD,STP,Checklist):
         df_dash = df_dash[df_dash['STP'].isin(STP)]
         df_dash = df_dash[df_dash['Inner or Outer'].isin(Checklist)]
         df_dash_group = df_dash.groupby(['STP', 'POD'], as_index=False)[
-            'Actual Activity', 'Plan Activity', 'Capacity'].sum()
+            'Actual Activity', 'Plan Activity'].sum()
         df_dash_group['Plan Utilisation (%)'] = (df_dash_group['Actual Activity']/df_dash_group['Plan Activity'])*100
         df_dash_group['Plan Utilisation (%)'] = df_dash_group['Plan Utilisation (%)'].replace([np.inf, -np.inf], np.nan)
-        df_dash_group['Capacity Utilisation (%)'] = (df_dash_group['Actual Activity'] / df_dash_group['Capacity']) * 100
-        df_dash_group['Capacity Utilisation (%)'] = df_dash_group['Capacity Utilisation (%)'].replace([np.inf, -np.inf], np.nan)
-        df_card = df_dash_group['Capacity Utilisation (%)'].mean()
+        df_card = df_dash_group['Plan Utilisation (%)'].mean()
         df_card = df_card.round(2)
         #df_card.map('{:.0f}'.format)
 
@@ -463,14 +329,12 @@ def render_content(POD,STP,Checklist):
         df_dash = df_dash[df_dash['POD'].isin(POD)]
         df_dash = df_dash[df_dash['STP'].isin(STP)]
         df_dash = df_dash[df_dash['Inner or Outer'].isin(Checklist)]
-        df_dash = df_dash[df_dash['Week Commencing Date']==oldest_date]
+        df_dash = df_dash[df_dash['Week Commencing Date']==most_recent_date]
         df_dash_group = df_dash.groupby(['STP', 'POD'], as_index=False)[
-            'Actual Activity', 'Plan Activity', 'Capacity'].sum()
+            'Actual Activity', 'Plan Activity'].sum()
         df_dash_group['Plan Utilisation (%)'] = (df_dash_group['Actual Activity']/df_dash_group['Plan Activity'])*100
         df_dash_group['Plan Utilisation (%)'] = df_dash_group['Plan Utilisation (%)'].replace([np.inf, -np.inf], np.nan)
-        df_dash_group['Capacity Utilisation (%)'] = (df_dash_group['Actual Activity'] / df_dash_group['Capacity']) * 100
-        df_dash_group['Capacity Utilisation (%)'] = df_dash_group['Capacity Utilisation (%)'].replace([np.inf, -np.inf], np.nan)
-        df_card = df_dash_group['Capacity Utilisation (%)'].mean()
+        df_card = df_dash_group['Plan Utilisation (%)'].mean()
         #df_card.map('{:.0f}'.format)
         df_card = df_card.round(2)
 
@@ -494,14 +358,14 @@ def render_content(POD,STP,Checklist):
         df_dash = df_dash[df_dash['Inner or Outer'].isin(Checklist)]
         # df_dash = df_dash[df_dash['Week Commencing Date']==oldest_date]
         df_dash_group = df_dash.groupby(['Week Commencing Date'], as_index=False)[
-            'Actual Activity', 'Capacity'].sum()
+            'Actual Activity', 'Plan Activity'].sum()
 
         fig = go.Figure()
 
         fig.add_trace(go.Scatter(x=df_dash_group["Week Commencing Date"], y=df_dash_group["Actual Activity"], name='Actuals',
                                  line=dict(color='royalblue', width=4)))
 
-        fig.add_trace(go.Scatter(x=df_dash_group["Week Commencing Date"], y=df_dash_group["Capacity"], name='Capacity',
+        fig.add_trace(go.Scatter(x=df_dash_group["Week Commencing Date"], y=df_dash_group["Plan Activity"], name='Plan',
                                  line=dict(color='firebrick', width=4, dash='dot')))
 
         fig.update_xaxes(showgrid=True, ticklabelmode="period", dtick="M1", tickformat="%b\n%Y", title='')
@@ -537,16 +401,16 @@ def render_content(POD,STP,Checklist):
         df_dash = df_dash[df_dash['STP'].isin(STP)]
         df_dash = df_dash[df_dash['Inner or Outer'].isin(Checklist)]
         df_dash_group = df_dash.groupby(['POD', 'Week Commencing Date'], as_index=False)[
-            'Actual Activity', 'Plan Activity', 'Capacity'].sum()
-        df_dash_group['Capacity Utilisation (%)'] = (df_dash_group['Actual Activity'] / df_dash_group['Capacity']) * 100
-        df_dash_group['Capacity Utilisation (%)'] = df_dash_group['Capacity Utilisation (%)'].replace([np.inf, -np.inf],np.nan)
+            'Actual Activity', 'Plan Activity'].sum()
+        df_dash_group['Plan Utilisation (%)'] = (df_dash_group['Actual Activity'] / df_dash_group['Plan Activity']) * 100
+        df_dash_group['Plan Utilisation (%)'] = df_dash_group['Plan Utilisation (%)'].replace([np.inf, -np.inf],np.nan)
 
-        fig = px.histogram(df_dash_group, x="Week Commencing Date", y="Capacity Utilisation (%)", histfunc="avg")
+        fig = px.histogram(df_dash_group, x="Week Commencing Date", y="Plan Utilisation (%)", histfunc="avg")
         fig.update_layout(bargap=0.1)
         fig.update_xaxes(showgrid=True, ticklabelmode="period", dtick="M1", tickformat="%b\n%Y", title='')
-        fig.add_trace(go.Scatter(mode="markers", x=df_dash_group["Week Commencing Date"], y=df_dash_group["Capacity Utilisation (%)"], name="weekly values"))
+        fig.add_trace(go.Scatter(mode="markers", x=df_dash_group["Week Commencing Date"], y=df_dash_group["Plan Utilisation (%)"], name="weekly values"))
         #fig.update_traces(texttemplate='%{text:.2s}', textposition='outside')
-        fig.update_layout(yaxis_title="Capacity Utilisation (%)",)
+        fig.update_layout(yaxis_title="Plan Utilisation (%)",)
         fig
 
         return fig
@@ -570,9 +434,9 @@ def render_content(POD,STP):
         dfmap = dfmap[dfmap['STP'].isin(STP)]
         #dfmap = dfmap[(dfmap['Week Index'] >= Date[0]) & (dfmap['Week Index'] <= Date[1])]
         # REMEMBER the as_index function turns the aggregate output from a Series into a Dataframe - important as some graphs/figures need Dfs
-        dfmap_group = dfmap.groupby(['STP', 'Provider', 'Lat', 'Long'], as_index=False)['Actual Activity'].sum()
+        dfmap_group = dfmap.groupby(['STP', 'Independent Provider', 'Lat', 'Long'], as_index=False)['Actual Activity'].sum()
         dfmap_group['Actual Activity for label'] = dfmap_group['Actual Activity'].map('{:,.0f}'.format)
-        dfmap_group['Label'] = dfmap_group['Actual Activity for label'].astype(str) + ' activities at ' + dfmap_group['Provider'] + ' within ' + dfmap_group['STP']
+        dfmap_group['Label'] = dfmap_group['Actual Activity for label'].astype(str) + ' activities at ' + dfmap_group['Independent Provider'] + ' within ' + dfmap_group['STP']
 
         locations = [go.Scattermapbox(
             lon=dfmap_group['Long'],
