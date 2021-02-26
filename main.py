@@ -14,18 +14,19 @@ import plotly.graph_objs as go
 from datetime import date
 
 
-#========================================== LOADING THE DATA ===========================================================
+#===================================== LOADING + TRANSFORMING THE DATA =================================================
 
+#Load Core data
 df = pd.read_csv(r'ActualsPlanTidy_Data.csv', encoding='ISO-8859-1', low_memory=False)
 df['Activity Count'].fillna(0, inplace=True)
-print(df.shape)
+#print(df.shape)
 df = df[(df['POD'] !='DNA/Cancellation (Theatres Only)') & (df['POD'] !='Number of 1/2 Day Lists (Theatres Only)') & (df['POD'] !='Chemotherapy')]
-print(df.shape)
+#print(df.shape)
 
 #Load Location data
 location_df = pd.read_csv(r'Location_data.csv', encoding='ISO-8859-1', low_memory=False)
 
-#Join Lat and Lon onto the original df
+#Join Location onto the Core df
 df = pd.merge(df,location_df,on='Independent Provider', how='left')
 print(df.shape)
 print(df)
@@ -51,7 +52,7 @@ df_merged = df_merged.drop(['Inner or Outer_y','Plan or Actuals_y','Lat_y','Long
 df_merged.rename(columns={'Inner or Outer_x':'Inner or Outer','Lat_x':'Lat','Long_x':'Long'}, inplace=True)
 
 #Find the most recent date
-df_merged['Week Commencing Date'] = pd.to_datetime(df_merged['Week Commencing Date'])
+df_merged['Week Commencing Date'] = pd.to_datetime(df_merged['Week Commencing Date'], dayfirst=True)
 most_recent_date = df_merged['Week Commencing Date'].max()
 oldest_date = df_merged['Week Commencing Date'].min()
 
@@ -126,7 +127,7 @@ app.layout = html.Div([
                                         id='date',
                                         min_date_allowed=date(1995, 8, 5),
                                         max_date_allowed=date(2023, 9, 1),
-                                        initial_visible_month=date(2020, 1, 1),
+                                        initial_visible_month=date(2021, 1, 1),
                                         start_date=date(2021,1,1),
                                         end_date=date(2021,3,30),
                                         style={'position':'relative', 'zIndex':'999'}
