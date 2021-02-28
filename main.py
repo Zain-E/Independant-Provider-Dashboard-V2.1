@@ -12,7 +12,7 @@ import numpy as np
 import base64
 import plotly.graph_objs as go
 from datetime import date
-
+import gunicorn
 
 #===================================== LOADING + TRANSFORMING THE DATA =================================================
 
