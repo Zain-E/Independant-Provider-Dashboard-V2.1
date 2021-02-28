@@ -18,7 +18,11 @@ from datetime import date
 
 #Load Core data
 df = pd.read_csv(r'ActualsPlanTidy_Data.csv', encoding='ISO-8859-1', low_memory=False)
+
+#Basic cleansing
 df['Activity Count'].fillna(0, inplace=True)
+df['Activity Count'].replace('-', 0)
+
 #print(df.shape)
 df = df[(df['POD'] !='DNA/Cancellation (Theatres Only)') & (df['POD'] !='Number of 1/2 Day Lists (Theatres Only)') & (df['POD'] !='Chemotherapy')]
 #print(df.shape)
@@ -110,8 +114,22 @@ app.layout = html.Div([
                                                         {'label': 'Inner Providers', 'value':'Inner'}
                                                       ],
                                                       value=['Outer'],
+                                                      inputStyle={"margin-right": "10px","margin-left": "10px"},
                                                       #labelStyle={'display': 'inline-block'},
                         ),style={'text-align': 'center','vertical-align':'middle'})),
+
+                       #html.Br(),
+
+                       dbc.Row(dbc.Col(
+                            dcc.Checklist(id='Checklist-eRS',
+                                          options=[
+                                              {'label': 'Acute', 'value': 'Normal'},
+                                              {'label': 'eRS', 'value': 'eRS'}
+                                          ],
+                                          value=['Normal','eRS'],
+                                          inputStyle={"margin-right": "10px","margin-left": "10px"},
+                                          # labelStyle={'display': 'inline-block'},
+                                          ), style={'text-align': 'center', 'vertical-align': 'middle','margin-left': '15px'})),
 
                        html.Br(),
 
@@ -133,7 +151,15 @@ app.layout = html.Div([
                                         style={'position':'relative', 'zIndex':'999'}
                                     ), width={'offset': 1})),
 
-                                    html.Div(id='Table')
+                                    html.Div(id='Table'),
+
+                                    html.Br(),
+
+                                    # dbc.Row([dbc.Col(),
+                                    #          dbc.Col(dbc.Card(dbc.CardBody([html.H2(id='Card Utilisation Table',style={'text-align': 'center'},className="card-text"),html.H3("%",className="card-title",style={'text-align': 'center'})]),color="rgb(188, 219, 245)",outline=True), width={'size': 5, 'offset': -1}),
+                                    #          dbc.Col()]),
+                                    #
+                                    # html.Br()
 
                                 ])]),
 
@@ -175,6 +201,9 @@ app.layout = html.Div([
                                     html.Br(),
                                     html.Hr(),
 
+                                    html.Br(),
+
+
                                 ])
                        ])
 
@@ -185,30 +214,35 @@ app.layout = html.Div([
 #=========================================== UTILISATION TABLE CALLBACK ================================================
 
 @app.callback(Output('Table', 'children'),
+               #Output('Card Utilisation Table', 'children')],
               [
                Input(component_id='POD_Dropdown', component_property='value'),
                Input(component_id='STP_Dropdown', component_property='value'),
                Input(component_id='Checklist', component_property='value'),
-              Input(component_id='date', component_property='start_date'),
-              Input(component_id='date', component_property='end_date')]
+               Input(component_id='Checklist-eRS', component_property='value'),
+               Input(component_id='date', component_property='start_date'),
+               Input(component_id='date', component_property='end_date')]
               )
-def render_content(POD,STP,Checklist,start_date,end_date):
+def render_content(POD,STP,Checklist,Checklist_eRS,start_date,end_date):
 
     df_dash = df_merged.copy()
     df_dash = df_dash[df_dash['POD'].isin(POD)]
     df_dash = df_dash[df_dash['STP'].isin(STP)]
     df_dash = df_dash[df_dash['Inner or Outer'].isin(Checklist)]
+    df_dash = df_dash[df_dash['Activity Type'].isin(Checklist_eRS)]
     df_dash = df_dash[(df_dash['Week Commencing Date'] >= start_date) & (df_dash['Week Commencing Date'] <= end_date)]
     df_dash_group = df_dash.groupby(['STP', 'Independent Provider'], as_index=False)[
         'Actual Activity', 'Plan Activity'].sum()
-    df_dash_group['Plan Utilisation (%)'] = (df_dash_group['Actual Activity']/df_dash_group['Plan Activity'])*100
-    df_dash_group['Plan Utilisation (%)'] = df_dash_group['Plan Utilisation (%)'].replace([np.inf, -np.inf], np.nan)
+    df_dash_group['Utilisation (%)'] = (df_dash_group['Actual Activity']/df_dash_group['Plan Activity'])*100
+    df_dash_group['Utilisation (%)'] = df_dash_group['Utilisation (%)'].replace([np.inf, -np.inf], np.nan)
+    card = df_dash_group['Utilisation (%)'].mean()
+    card = card.round(2)
 
 
     #Formatting
     df_dash_group['Actual Activity'] = df_dash_group['Actual Activity'].map('{:,.0f}'.format)#to get numbers in format correctly
     df_dash_group['Plan Activity'] = df_dash_group['Plan Activity'].map('{:,.0f}'.format)  # to get numbers in format correctly
-    df_dash_group['Plan Utilisation (%)'] = df_dash_group['Plan Utilisation (%)'].map('{:.0f}'.format)  # to get numbers in format correctly
+    df_dash_group['Utilisation (%)'] = df_dash_group['Utilisation (%)'].map('{:.0f}'.format)  # to get numbers in format correctly
 
     return html.Div([
 
@@ -232,7 +266,7 @@ def render_content(POD,STP,Checklist,start_date,end_date):
                                               'width': '12%',
                                               'textAlign': 'center',
                                               },# 5
-                                             {'if': {'column_id': 'Plan Utilisation (%)'},
+                                             {'if': {'column_id': 'Utilisation (%)'},
                                               'width': '9%',
                                               'textAlign': 'center',
                                               },
@@ -241,32 +275,32 @@ def render_content(POD,STP,Checklist,start_date,end_date):
 
                          style_data_conditional=[{
                                                  'if': {
-                                                     'filter_query': '{Plan Utilisation (%)} >= 0 && {Plan Utilisation (%)} < 60',
-                                                     'column_id': 'Plan Utilisation (%)'
+                                                     'filter_query': '{Utilisation (%)} >= 0 && {Utilisation (%)} < 60',
+                                                     'column_id': 'Utilisation (%)'
                                                  },
                                                  'backgroundColor': 'tomato',
                                                  'color': 'white'
                                              },
                                              {
                                                  'if': {
-                                                     'filter_query': '{Plan Utilisation (%)} >= 80',
-                                                     'column_id': 'Plan Utilisation (%)'
+                                                     'filter_query': '{Utilisation (%)} >= 80',
+                                                     'column_id': 'Utilisation (%)'
                                                  },
                                                  'backgroundColor': 'green',
                                                  'color': 'white'
                                              },
                                              {
                                                  'if': {
-                                                     'filter_query': '{Plan Utilisation (%)} >= 60 && {Plan Utilisation (%)} < 80',
-                                                     'column_id': 'Plan Utilisation (%)'
+                                                     'filter_query': '{Utilisation (%)} >= 60 && {Utilisation (%)} < 80',
+                                                     'column_id': 'Utilisation (%)'
                                                  },
                                                  'backgroundColor': 'orange',
                                                  'color': 'white'
                                              },
                                              {
                                                  'if': {
-                                                     'filter_query': '{Plan Utilisation (%)} contains "nan"',
-                                                     'column_id': 'Plan Utilisation (%)'
+                                                     'filter_query': '{Utilisation (%)} contains "nan"',
+                                                     'column_id': 'Utilisation (%)'
                                                  },
                                                  'backgroundColor': 'rgb(204,204,204)',
                                                  'color': 'grey',
@@ -294,16 +328,18 @@ def render_content(POD,STP,Checklist,start_date,end_date):
               [
                Input(component_id='POD_Dropdown', component_property='value'),
                Input(component_id='STP_Dropdown', component_property='value'),
-               Input(component_id='Checklist', component_property='value')]
+               Input(component_id='Checklist', component_property='value'),
+               Input(component_id='Checklist-eRS', component_property='value')]
               )
 
-def render_content(POD,STP,Checklist):
+def render_content(POD,STP,Checklist,Checklist_eRS):
 
 
         df_dash = df_merged.copy()
         df_dash = df_dash[df_dash['POD'].isin(POD)]
         df_dash = df_dash[df_dash['STP'].isin(STP)]
         df_dash = df_dash[df_dash['Inner or Outer'].isin(Checklist)]
+        df_dash = df_dash[df_dash['Activity Type'].isin(Checklist_eRS)]
         df_dash_group = df_dash.groupby(['STP', 'POD'], as_index=False)[
             'Actual Activity', 'Plan Activity'].sum()
         df_dash_group['Plan Utilisation (%)'] = (df_dash_group['Actual Activity']/df_dash_group['Plan Activity'])*100
@@ -320,16 +356,18 @@ def render_content(POD,STP,Checklist):
               [
                Input(component_id='POD_Dropdown', component_property='value'),
                Input(component_id='STP_Dropdown', component_property='value'),
-               Input(component_id='Checklist', component_property='value')]
+               Input(component_id='Checklist', component_property='value'),
+               Input(component_id='Checklist-eRS', component_property='value')]
               )
 
-def render_content(POD,STP,Checklist):
+def render_content(POD,STP,Checklist,Checklist_eRS):
 
 
         df_dash = df_merged.copy()
         df_dash = df_dash[df_dash['POD'].isin(POD)]
         df_dash = df_dash[df_dash['STP'].isin(STP)]
         df_dash = df_dash[df_dash['Inner or Outer'].isin(Checklist)]
+        df_dash = df_dash[df_dash['Activity Type'].isin(Checklist_eRS)]
         df_dash = df_dash[df_dash['Week Commencing Date']==most_recent_date]
         df_dash_group = df_dash.groupby(['STP', 'POD'], as_index=False)[
             'Actual Activity', 'Plan Activity'].sum()
@@ -347,16 +385,18 @@ def render_content(POD,STP,Checklist):
               [
                Input(component_id='POD_Dropdown', component_property='value'),
                Input(component_id='STP_Dropdown', component_property='value'),
-               Input(component_id='Checklist', component_property='value')]
+               Input(component_id='Checklist', component_property='value'),
+               Input(component_id='Checklist-eRS', component_property='value')]
               )
 
-def render_content(POD,STP,Checklist):
+def render_content(POD,STP,Checklist,Checklist_eRS):
 
 
         df_dash = df_merged.copy()
         df_dash = df_dash[df_dash['POD'].isin(POD)]
         df_dash = df_dash[df_dash['STP'].isin(STP)]
         df_dash = df_dash[df_dash['Inner or Outer'].isin(Checklist)]
+        df_dash = df_dash[df_dash['Activity Type'].isin(Checklist_eRS)]
         # df_dash = df_dash[df_dash['Week Commencing Date']==oldest_date]
         df_dash_group = df_dash.groupby(['Week Commencing Date'], as_index=False)[
             'Actual Activity', 'Plan Activity'].sum()
@@ -391,16 +431,18 @@ def render_content(POD,STP,Checklist):
               [
                Input(component_id='POD_Dropdown', component_property='value'),
                Input(component_id='STP_Dropdown', component_property='value'),
-               Input(component_id='Checklist', component_property='value')]
+               Input(component_id='Checklist', component_property='value'),
+               Input(component_id='Checklist-eRS', component_property='value')]
               )
 
-def render_content(POD,STP,Checklist):
+def render_content(POD,STP,Checklist,Checklist_eRS):
 
 
         df_dash = df_merged.copy()
         df_dash = df_dash[df_dash['POD'].isin(POD)]
         df_dash = df_dash[df_dash['STP'].isin(STP)]
         df_dash = df_dash[df_dash['Inner or Outer'].isin(Checklist)]
+        df_dash = df_dash[df_dash['Activity Type'].isin(Checklist_eRS)]
         df_dash_group = df_dash.groupby(['POD', 'Week Commencing Date'], as_index=False)[
             'Actual Activity', 'Plan Activity'].sum()
         df_dash_group['Plan Utilisation (%)'] = (df_dash_group['Actual Activity'] / df_dash_group['Plan Activity']) * 100
@@ -423,16 +465,18 @@ access_token = 'pk.eyJ1IjoiemFpbmVpc2EiLCJhIjoiY2tlZWg0MXJvMGcwZzJyb3k1OXh0Ym55a
 @app.callback(Output('Map_content', 'figure'),
               [#Input('tabs', 'value'),
                Input(component_id='POD_Dropdown', component_property='value'),
-               Input(component_id='STP_Dropdown', component_property='value')
+               Input(component_id='STP_Dropdown', component_property='value'),
+               Input(component_id='Checklist-eRS', component_property='value')
                ])
 
 
-def render_content(POD,STP):
+def render_content(POD,STP,Checklist_eRS):
 
         dfmap = df_merged
         #dfmap = dfmap.drop(dfmap[(dfmap['Plan Or Actual'] == 'Actuals')].index)
         dfmap = dfmap[dfmap['POD'].isin(POD)]
         dfmap = dfmap[dfmap['STP'].isin(STP)]
+        dfmap = dfmap[dfmap['Activity Type'].isin(Checklist_eRS)]
         #dfmap = dfmap[(dfmap['Week Index'] >= Date[0]) & (dfmap['Week Index'] <= Date[1])]
         # REMEMBER the as_index function turns the aggregate output from a Series into a Dataframe - important as some graphs/figures need Dfs
         dfmap_group = dfmap.groupby(['STP', 'Independent Provider', 'Lat', 'Long'], as_index=False)['Actual Activity'].sum()
